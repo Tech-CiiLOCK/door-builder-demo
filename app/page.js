@@ -1,11 +1,12 @@
 // app/page.js
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { MeshStandardMaterial, Box3, Vector3, Color } from 'three';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+
 
 
 //original
@@ -211,17 +212,18 @@ import { MeshStandardMaterial, Box3, Vector3, Color } from 'three';
 //     );
 // }
 
-function DraggableItem({ itemUrl, models, targetSize }) {
+function DraggableItem({ itemUrl, models, targetSize, itemsToRemove }) {
     const [items, setItems] = useState([]);
 
     useEffect(() => {
         if (itemUrl && models.length > 0) {
+            console.log("Loading item:", itemUrl); // Debugging log
             const loader = new GLTFLoader();
             loader.load(itemUrl, (gltf) => {
                 const itemScene = gltf.scene;
 
-                // Create instances of the item
-                const loadedItems = models.map(model => {
+                // Create instances of the item and add them to each model
+                const loadedItems = models.map((model) => {
                     const itemClone = itemScene.clone();
 
                     // Calculate bounding box and scale the items based on target size
@@ -241,17 +243,102 @@ function DraggableItem({ itemUrl, models, targetSize }) {
                 });
 
                 setItems(loadedItems); // Store the items in state
+                console.log("Items added:", loadedItems); // Debugging log
             });
         }
     }, [itemUrl, models, targetSize]);
 
-    return null; // No need to render anything directly since items are added to models
+    useEffect(() => {
+        if (itemsToRemove) {
+            console.log("Attempting to remove items:", items); // Log to verify removal process is starting
+            items.forEach((item) => {
+                if (item.parent) {
+                    console.log("Removing item:", item); // Log each item before removal
+                    item.parent.remove(item); // Remove the item from its parent model
+                }
+            });
+            setItems([]); // Clear the items from state
+            console.log("Items after removal:", items); // This should show an empty array
+        }
+    }, [itemsToRemove, items]);
+}
+    
+
+
+
+
+function CameraControls({ orbitEnabled, activeModel }) {
+    const controlsRef = useRef();
+    const { gl } = useThree();
+
+    const rotateActiveModel = useCallback((e) => {
+        if (activeModel && e.buttons === 1) { // Left-click (e.buttons === 1 ensures it's held down)
+            const rotationSpeed = 0.01;
+            activeModel.rotation.y += e.movementX * rotationSpeed;
+            activeModel.rotation.x += e.movementY * rotationSpeed;
+        }
+    }, [activeModel]);
+
+    useEffect(() => {
+        if (controlsRef.current) {
+            controlsRef.current.enabled = orbitEnabled && !activeModel;
+        }
+        if (activeModel) {
+            gl.domElement.addEventListener('mousemove', rotateActiveModel);
+        }
+        return () => {
+            if (activeModel) {
+                gl.domElement.removeEventListener('mousemove', rotateActiveModel);
+            }
+        };
+    }, [orbitEnabled, activeModel, rotateActiveModel, gl.domElement]);
+
+    return <OrbitControls ref={controlsRef} />;
 }
 
-function ModelViewer({ url, itemUrl, setOrbitEnabled, selectedMaterialId, materials, itemTargetSizes, showBothModels }) {
+function ModelViewer({ url, itemUrl, setOrbitEnabled, selectedMaterialId, materials, itemTargetSizes, showBothModels, setActiveModel }) {
     const [model, setModel] = useState(null);
     const [duplicateModel, setDuplicateModel] = useState(null);
-    const { camera } = useThree();
+    const [rotationMode, setRotationMode] = useState(null);
+
+    const { camera, gl } = useThree();
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'x') {
+                setRotationMode('duplicate'); // Activate rotation mode for duplicate model
+            }
+            if (e.key === 'z') {
+                setRotationMode('original'); // Activate rotation mode for original model
+            }
+        };
+
+        const handleKeyUp = (e) => {
+            if (e.key === 'x' || e.key === 'z') {
+                setRotationMode(null); // Deactivate rotation mode
+                setActiveModel(null); // Clear active model when rotation mode is deactivated
+            }
+        };
+
+        const handleMouseDown = (e) => {
+            if (rotationMode === 'duplicate' && e.buttons === 1) { // Left-click for duplicate model
+                setActiveModel(duplicateModel); // Set the duplicate model as active
+            }
+            if (rotationMode === 'original' && e.buttons === 1) { // Left-click for original model
+                setActiveModel(model); // Set the original model as active
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        gl.domElement.addEventListener('mousedown', handleMouseDown);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+            gl.domElement.removeEventListener('mousedown', handleMouseDown);
+        };
+    }, [rotationMode, model, duplicateModel, gl.domElement]);
 
     useEffect(() => {
         if (url) {
@@ -265,7 +352,7 @@ function ModelViewer({ url, itemUrl, setOrbitEnabled, selectedMaterialId, materi
                 const maxDim = Math.max(size.x, size.y, size.z);
                 const gap = maxDim * 1.0;
 
-                scene.position.set(-gap / 6, 0, 0);
+                scene.position.set(-gap / 4, 0, 0);
                 setModel(scene);
 
                 if (showBothModels) {
@@ -312,25 +399,15 @@ function ModelViewer({ url, itemUrl, setOrbitEnabled, selectedMaterialId, materi
     );
 }
 
-function CameraControls({ orbitEnabled }) {
-    const controlsRef = useRef();
-
-    useEffect(() => {
-        if (controlsRef.current) {
-            controlsRef.current.enabled = orbitEnabled;
-        }
-    }, [orbitEnabled]);
-
-    return <OrbitControls ref={controlsRef} />;
-}
-
 export default function HomePage() {
     const [models, setModels] = useState([]);
     const [selectedModel, setSelectedModel] = useState('');
     const [selectedItem, setSelectedItem] = useState('');
     const [selectedMaterialId, setSelectedMaterialId] = useState('');
     const [orbitEnabled, setOrbitEnabled] = useState(true);
-    const [showBothModels, setShowBothModels] = useState(false); // State to control single or both models display
+    const [showBothModels, setShowBothModels] = useState(false);
+    const [itemsToRemove, setItemsToRemove] = useState(false); // State to trigger item removal
+    const [activeModel, setActiveModel] = useState(null); // State to track the active model
 
     const items = [
         { id: 'item1', name: 'Door Handle 1', modelUrl: '/models/item1.glb' },
@@ -358,6 +435,7 @@ export default function HomePage() {
         setSelectedModel(e.target.value);
         setSelectedItem('');
         setSelectedMaterialId('');
+        setActiveModel(null); // Reset active model on model change
     };
 
     const handleItemChange = (e) => {
@@ -373,6 +451,18 @@ export default function HomePage() {
         setShowBothModels(e.target.value === 'both');
     };
 
+    const handleRemoveItems = () => {
+        console.log("Remove Items button clicked"); // Log when the button is clicked
+        setItemsToRemove(true);
+    
+        // Delay resetting `itemsToRemove` to ensure the effect runs
+        setTimeout(() => {
+            console.log("Resetting itemsToRemove"); // Log when resetting itemsToRemove
+            setItemsToRemove(false);
+        }, 500); // Increased delay to ensure the removal process completes
+    };
+    
+
     return (
         <div className="bg-white h-screen flex gap-8 items-center justify-center">
             <div className="h-[700px] w-full max-w-3xl bg-white mt-2 ring-4 ring-slate-300">
@@ -384,7 +474,7 @@ export default function HomePage() {
 
                 <Canvas camera={{ fov: 50 }}>
                     <ambientLight />
-                    <CameraControls orbitEnabled={orbitEnabled} />
+                    <CameraControls orbitEnabled={orbitEnabled} activeModel={activeModel} />
                     <ModelViewer
                         key={selectedModel}
                         url={selectedModel}
@@ -393,7 +483,9 @@ export default function HomePage() {
                         selectedMaterialId={selectedMaterialId}
                         materials={materials}
                         itemTargetSizes={itemTargetSizes}
-                        showBothModels={showBothModels} // Pass whether to show both models
+                        showBothModels={showBothModels}
+                        itemsToRemove={itemsToRemove}
+                        setActiveModel={setActiveModel}
                     />
                 </Canvas>
             </div>
@@ -463,8 +555,20 @@ export default function HomePage() {
                         ))}
                     </select>
                 </div>
+                <div className="mt-4">
+                    <button
+                        onClick={handleRemoveItems}
+                        className="bg-red-500 text-white p-2 rounded"
+                    >
+                        Remove Items
+                    </button>
+                </div>
             </div>
         </div>
     );
 }
+
+
+
+
 
