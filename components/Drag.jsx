@@ -19,6 +19,7 @@ const Drag = ({ itemUrl, model, setOrbitEnabled, targetSize }) => {
                 const box = new Box3().setFromObject(itemScene);
                 const size = new Vector3();
                 box.getSize(size);
+                
                 const scale = targetSize / Math.max(size.x, size.y, size.z);
                 itemScene.scale.setScalar(scale);
 

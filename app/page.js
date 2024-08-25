@@ -50,6 +50,7 @@ export default function HomePage() {
         setSelectedModel(e.target.value);
         setSelectedItem(''); // Reset item selection when model changes
         setSelectedMaterialId(''); // Reset material selection when model changes
+        setModelScale({ x: 1, y: 1, z: 1 }); // Reset model scale when model changes
     };
 
     // Handle change of selected item

@@ -25,6 +25,7 @@ const Viewer = ({ url, itemUrl, setOrbitEnabled, selectedMaterialId, materials, 
                 // Adjust camera position based on model size
                 const size = new Vector3();
                 box.getSize(size);
+                
                 const maxDim = Math.max(size.x, size.y, size.z);
                 const fov = camera.fov * (Math.PI / 180);
                 let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
@@ -55,7 +56,7 @@ const Viewer = ({ url, itemUrl, setOrbitEnabled, selectedMaterialId, materials, 
             model.scale.set(modelScale.x, modelScale.y, modelScale.z);
         }
     }, [model, modelScale]);
-    
+
     return (
         model && (
             <>
