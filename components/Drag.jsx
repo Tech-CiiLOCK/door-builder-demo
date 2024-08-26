@@ -1,33 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { Box3, Vector3 } from 'three';
+import { Vector3 } from 'three';
 
-const Drag = ({ itemUrl, model, setOrbitEnabled, targetSize }) => {
-    const [item, setItem] = useState(null); // State to store the loaded item
+const Drag = ({ item, setOrbitEnabled }) => {
     const [dragging, setDragging] = useState(false); // State to track if the item is being dragged
     const { camera, mouse } = useThree(); // Access camera and mouse from the Three.js context
     const rotationSpeed = 0.1; // Speed of rotation when using arrow keys or WASD
-
-    useEffect(() => {
-        if (itemUrl && model) {
-            const loader = new GLTFLoader();
-            loader.load(itemUrl, (gltf) => {
-                const itemScene = gltf.scene;
-
-                // Calculate bounding box and scale the item based on target size
-                const box = new Box3().setFromObject(itemScene);
-                const size = new Vector3();
-                box.getSize(size);
-                
-                const scale = targetSize / Math.max(size.x, size.y, size.z);
-                itemScene.scale.setScalar(scale);
-
-                setItem(itemScene);
-                model.add(itemScene); // Add the item to the model
-            });
-        }
-    }, [itemUrl, model, targetSize]);
 
     // Handlers to manage dragging state and control OrbitControls
     const handlePointerDown = () => {
@@ -83,6 +61,6 @@ const Drag = ({ itemUrl, model, setOrbitEnabled, targetSize }) => {
             />
         )
     );
-}
+};
 
 export default Drag;

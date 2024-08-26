@@ -3,29 +3,33 @@ import { useThree } from '@react-three/fiber';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { Box3, Vector3 } from 'three';
 import Drag from './Drag';
+import MaterialChanger from './MaterialChanger';
 
-const Viewer = ({ url, itemUrl, setOrbitEnabled, selectedMaterialId, materials, itemTargetSizes, modelScale }) => {
+const Viewer = ({ url, items, setOrbitEnabled, selectedMaterialId, materials, itemTargetSizes, modelScale, removeMode }) => {
     const [model, setModel] = useState(null); // State to store the main model
-    const { camera } = useThree(); // Access the camera from the Three.js context
+    const [addedItems, setAddedItems] = useState([]); // State to store the added items
+    const [selectedItem, setSelectedItem] = useState(null); // State to store the selected item for material change
+    const { camera, scene } = useThree(); // Access the camera and scene from the Three.js context
 
     // Load the main model from the provided URL
     useEffect(() => {
         if (url) {
             const loader = new GLTFLoader();
             loader.load(url, (gltf) => {
-                const scene = gltf.scene;
-                setModel(scene);
+                const sceneModel = gltf.scene;
+                setModel(sceneModel);
+                scene.add(sceneModel);
 
                 // Center and position the model within the scene
-                const box = new Box3().setFromObject(scene);
+                const box = new Box3().setFromObject(sceneModel);
                 const center = new Vector3();
                 box.getCenter(center);
-                scene.position.sub(center); // Center the model
+                sceneModel.position.sub(center); // Center the model
 
                 // Adjust camera position based on model size
                 const size = new Vector3();
                 box.getSize(size);
-                
+
                 const maxDim = Math.max(size.x, size.y, size.z);
                 const fov = camera.fov * (Math.PI / 180);
                 let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
@@ -33,38 +37,78 @@ const Viewer = ({ url, itemUrl, setOrbitEnabled, selectedMaterialId, materials, 
                 camera.lookAt(center);
             });
         }
-    }, [url, camera]);
+    }, [url, camera, scene]);
 
-    // Apply the selected material to the model
+    // Add items to the scene when they are selected, only once
     useEffect(() => {
-        if (model && selectedMaterialId) {
-            const selectedMaterial = materials.find(mat => mat.id === selectedMaterialId)?.material;
-            if (selectedMaterial) {
-                model.traverse((child) => {
-                    if (child.isMesh) {
-                        child.material = selectedMaterial; // Update the material of each mesh
-                    }
-                });
-            }
+        if (items.length > 0 && model) {
+            items.forEach((itemUrl) => {
+                if (!addedItems.some(item => item.itemUrl === itemUrl)) {
+                    const targetSize = itemTargetSizes[itemUrl] || 1; // Default target size if not defined
+                    const loader = new GLTFLoader();
+                    loader.load(itemUrl, (gltf) => {
+                        const itemScene = gltf.scene;
+
+                        // Scale the item
+                        const box = new Box3().setFromObject(itemScene);
+                        const size = new Vector3();
+                        box.getSize(size);
+                        const scale = targetSize / Math.max(size.x, size.y, size.z);
+                        itemScene.scale.setScalar(scale);
+
+                        model.add(itemScene); // Add the item to the model
+                        setAddedItems((prevItems) => [...prevItems, { itemUrl, item: itemScene }]);
+                    });
+                }
+            });
         }
-    }, [model, selectedMaterialId, materials]);
+    }, [items, model, addedItems, itemTargetSizes]);
 
-    const targetSize = itemTargetSizes[itemUrl] || 1; // Default target size 1 if not defined
-
+    // Update the scale of the model based on user input
     useEffect(() => {
         if (model) {
             model.scale.set(modelScale.x, modelScale.y, modelScale.z);
         }
     }, [model, modelScale]);
 
+    // Handle clicking on an item to select it
+    const handleItemClick = (clickedItem) => {
+        setSelectedItem(clickedItem);
+        if (removeMode) {
+            if (clickedItem && clickedItem.parent) {
+                clickedItem.parent.remove(clickedItem);
+            }
+            setAddedItems((prevItems) => prevItems.filter((itemData) => itemData !== clickedItem));
+        }
+
+    };
+    
     return (
         model && (
             <>
                 <primitive object={model} />
-                <Drag itemUrl={itemUrl} model={model} setOrbitEnabled={setOrbitEnabled} targetSize={targetSize} />
+                {addedItems.map((itemData, index) => (
+                    <React.Fragment key={index}>
+                        <primitive
+                            object={itemData.item}
+                            onClick={() => handleItemClick(itemData.item)} // Select item on click
+                        />
+                        <Drag
+                            item={itemData.item}
+                            setOrbitEnabled={setOrbitEnabled}
+                        />
+                    </React.Fragment>
+                ))}
+                {selectedItem && (
+                    <MaterialChanger
+                        item={selectedItem}
+                        selectedMaterialId={selectedMaterialId}
+                        materials={materials}
+                    />
+                )}
             </>
         )
     );
-}
+};
 
 export default Viewer;

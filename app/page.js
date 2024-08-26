@@ -12,9 +12,11 @@ export default function HomePage() {
     const [items, setItems] = useState([]);
     const [materials, setMaterials] = useState([]);
     const [selectedModel, setSelectedModel] = useState(''); // Currently selected model
-    const [selectedItem, setSelectedItem] = useState(''); // Currently selected item
+    const [addedItems, setAddedItems] = useState([]); // List of added items
     const [selectedMaterialId, setSelectedMaterialId] = useState(''); // Currently selected material
     const [orbitEnabled, setOrbitEnabled] = useState(true);
+    const [removeMode, setRemoveMode] = useState(false);
+
 
     const [modelScale, setModelScale] = useState({ x: 1, y: 1, z: 1 });
 
@@ -48,15 +50,10 @@ export default function HomePage() {
     // Handle change of selected model
     const handleModelChange = (e) => {
         setSelectedModel(e.target.value);
-        setSelectedItem(''); // Reset item selection when model changes
+
         setSelectedMaterialId(''); // Reset material selection when model changes
         setModelScale({ x: 1, y: 1, z: 1 }); // Reset model scale when model changes
-    };
-
-    // Handle change of selected item
-    const handleItemChange = (e) => {
-        const selectedItem = items.find(item => item.id === e.target.value);
-        setSelectedItem(selectedItem ? selectedItem.modelUrl : '');
+        setAddedItems([]);
     };
 
     // Handle change of selected material
@@ -69,6 +66,10 @@ export default function HomePage() {
             ...prevScale,
             [axis]: value
         }));
+    };
+
+    const handleItemClick = (itemUrl) => {
+        setAddedItems((prevItems) => [...prevItems, itemUrl]);
     };
 
     return (
@@ -86,12 +87,13 @@ export default function HomePage() {
                     <Viewer
                         key={selectedModel} // Re-render the ModelViewer when selectedModel changes
                         url={selectedModel}
-                        itemUrl={selectedItem}
+                        items={addedItems}
                         setOrbitEnabled={setOrbitEnabled}
                         selectedMaterialId={selectedMaterialId}
                         materials={materials}
                         itemTargetSizes={itemTargetSizes}
                         modelScale={modelScale}
+                        removeMode={removeMode}
                     />
                 </Canvas>
             </div>
@@ -116,26 +118,23 @@ export default function HomePage() {
                     </select>
                 </div>
                 <div>
-                    <h2 className="text-lg font-bold mt-4">Select an Item</h2>
-                    <p>Use A/D W/S to rotate</p>
-                    {/* Dropdown for selecting items */}
-                    <select
-                        onChange={handleItemChange}
-                        value={selectedItem}
-                        className="p-2 bg-black text-white rounded"
-                    >
-                        <option value="" disabled>
-                            Select an item
-                        </option>
+                    <h2 className="text-lg font-bold mt-4">Click item to add</h2>
+                    <p>Click on an item to add it to the scene</p>
+                    <div className="grid grid-cols-2 gap-4">
                         {items.map((item) => (
-                            <option key={item.id} value={item.id}>
+                            <button
+                                key={item.id}
+                                onClick={() => handleItemClick(item.modelUrl)}
+                                className="p-2 bg-black text-white rounded"
+                            >
                                 {item.name}
-                            </option>
+                            </button>
                         ))}
-                    </select>
+                    </div>
                 </div>
+
                 <div>
-                    <h2 className="text-lg font-bold mt-4">Select a Material</h2>
+                    <h2 className="text-lg font-bold mt-4">Select material for item</h2>
                     {/* Dropdown for selecting materials */}
                     <select
                         onChange={handleMaterialChange}
@@ -143,7 +142,7 @@ export default function HomePage() {
                         className="p-2 bg-black text-white rounded"
                     >
                         <option value="" disabled>
-                            Select a material
+                            Select material
                         </option>
                         {materials.map((mat) => (
                             <option key={mat.id} value={mat.id}>
@@ -191,6 +190,13 @@ export default function HomePage() {
                         />
                     </label>
                 </div>
+                <button
+                    onClick={() => setRemoveMode(!removeMode)}
+                    className={`p-2 ${removeMode ? 'bg-red-600' : 'bg-black'} text-white rounded mt-4`}
+                >
+                    {removeMode ? 'Exit Remove Mode' : 'Enter Remove Mode'}
+                </button>
+
             </div>
         </div>
     );
